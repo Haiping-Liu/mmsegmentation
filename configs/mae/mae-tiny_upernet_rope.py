@@ -36,8 +36,8 @@ model = dict(
 
     decode_head=dict(
         type='UPerHead',
-        in_channels=[192, 192, 192, 192],
-        channels=192,
+        in_channels=[384, 384, 384, 384],
+        channels=384,
         pool_scales=(1, 2, 3, 6),
         dropout_ratio=0.1,
         num_classes=150,
@@ -48,8 +48,8 @@ model = dict(
     ),
     auxiliary_head=dict(
         type='FCNHead',
-        in_channels=192,
-        channels=192,
+        in_channels=384,
+        channels=384,
         num_convs=1,
         concat_input=False,
         dropout_ratio=0.1,
@@ -65,16 +65,6 @@ model = dict(
         stride=(341, 341)
     )
 )
-
-
-
-# optim_wrapper = dict(
-#     _delete_=True,
-#     type='OptimWrapper',
-#     optimizer=dict(
-#         type='AdamW', lr=1e-4, betas=(0.9, 0.999), weight_decay=0.05),
-#     paramwise_cfg=dict(num_layers=12, layer_decay_rate=0.65),
-#     constructor='LearningRateDecayOptimizerConstructor')
     
 optim_wrapper = dict(
     _delete_=True,
@@ -86,27 +76,10 @@ optim_wrapper = dict(
     ),
     paramwise_cfg=dict(
         num_layers=12,
-        layer_decay_rate=0.65,      # 你的旧写法
+        layer_decay_rate=0.65,      
     ),
     constructor='LayerDecayOptimizerConstructor'  # 注意这里
 )
-
-# optim_wrapper = dict(
-#     _delete_=True,
-#     type='OptimWrapper',
-#     optimizer=dict(
-#         type='AdamW',
-#         lr=1e-4,
-#         betas=(0.9, 0.999),
-#         weight_decay=0.05
-#     ),
-#     constructor='LearningRateDecayOptimizerConstructor',
-#     paramwise_cfg=dict(
-#         num_layers=12,
-#         decay_type='layer_wise_vit',
-#         decay_rate=0.65
-#     )
-# )
 
 param_scheduler = [
     dict(
@@ -120,6 +93,19 @@ param_scheduler = [
         by_epoch=False,
     )
 ]
+
+default_hooks = dict(
+    logger=dict(
+        type='WandbLoggerHook',
+        init_kwargs=dict(
+            project='mae-rope-segmentation',
+            name='upernet-mae-rope-ade20k'
+        )
+    )
+)
+
+visualizer = dict(type='SegLocalVisualizer', vis_backends=[dict(type='LocalVisBackend')])
+
 
 # mixed precision
 fp16 = dict(loss_scale='dynamic')

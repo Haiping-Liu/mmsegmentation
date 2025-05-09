@@ -3,16 +3,15 @@ import torch
 from mmengine.model import BaseModule
 from mmseg.registry import MODELS  # 若通用，建议换成 mmengine.registry
 
-# import sys
-# import os
-# sys.path.insert(0, os.path.abspath(os.path.join(__file__, '../../../..')))
-# print("PYTHONPATH inserted:", os.path.abspath(os.path.join(__file__, '../../../..')))
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(__file__, '../../../..')))
+print("PYTHONPATH inserted:", os.path.abspath(os.path.join(__file__, '../../../..')))
 
 # print("sys.path =", sys.path)
 from models.mae_rope import MAE_RoPE
 from models.vit import create_vit
 from configs.utils import load_config_from_yaml
-from RoPE.standard_rope import compute_axial_cis
 
 @MODELS.register_module()
 class VisionTransformerRoPE(BaseModule):
@@ -88,3 +87,7 @@ class VisionTransformerRoPE(BaseModule):
             for m in self.modules():
                 if isinstance(m, nn.LayerNorm):
                     m.eval()
+
+
+
+        
