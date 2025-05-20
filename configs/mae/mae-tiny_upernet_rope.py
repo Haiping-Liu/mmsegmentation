@@ -1,12 +1,16 @@
 _base_ = [
-    '../_base_/models/upernet_mae.py', '../_base_/datasets/ade20k.py',
-    '../_base_/default_runtime.py', '../_base_/schedules/schedule_160k.py'
+    '../_base_/models/upernet_mae.py',
+    '../_base_/datasets/ade20k.py',
+    '../_base_/default_runtime.py',
+    '../_base_/schedules/schedule_160k.py',
 ]
+
+
 crop_size = (512, 512)
 data_preprocessor = dict(size=crop_size)
 
 custom_imports = dict(
-    imports=['mmseg.models.backbones.VisionTransformerRoPE'],  # 注意是 Python 模块路径
+    imports=['mmseg.models.backbones.VisionTransformerRoPE'],  
     allow_failed_imports=False
 )
 
@@ -16,22 +20,16 @@ model = dict(
         _delete_=True,
         type='VisionTransformerRoPE',
         config_path=(
-            '/workspace/Learning-RoPE/outputs/'
-            'householder-mae-rope-lr0.00015-bs256-0422_1540/'
-            'configs/config.yaml'
+                    '/workspace/Learning-RoPE/ckpt/householder/config.yaml'
         ),
+        ckpt_path='/workspace/Learning-RoPE/ckpt/householder/householder-epoch-399.ckpt',
         encoder_type='mae',
         return_cls_token=False,
         return_feat_only=False,
         norm_eval=True,
         img_size=512,
         out_indices=[3, 5, 7, 11],
-        init_cfg=dict(
-            type='Pretrained',
-            checkpoint='/workspace/Learning-RoPE/mae_encoder_only.pth'
-        )
     ),
-    # 明确告诉 mmseg：没有 neck，删掉基线里的 FeaturePyramid
     neck=None,
 
     decode_head=dict(
@@ -78,7 +76,7 @@ optim_wrapper = dict(
         num_layers=12,
         layer_decay_rate=0.65,      
     ),
-    constructor='LayerDecayOptimizerConstructor'  # 注意这里
+    constructor='LayerDecayOptimizerConstructor'
 )
 
 param_scheduler = [
@@ -94,23 +92,74 @@ param_scheduler = [
     )
 ]
 
-default_hooks = dict(
-    logger=dict(
-        type='WandbLoggerHook',
-        init_kwargs=dict(
-            project='mae-rope-segmentation',
-            name='upernet-mae-rope-ade20k'
-        )
-    )
+train_cfg = dict(
+    type='IterBasedTrainLoop',
+    max_iters=160000,
+    val_interval=2000
 )
 
-visualizer = dict(type='SegLocalVisualizer', vis_backends=[dict(type='LocalVisBackend')])
+vis_backends = [
+    dict(type='LocalVisBackend'),
+    dict(type='TensorboardVisBackend')
+]
+
+visualizer = dict(
+    type='SegLocalVisualizer',
+    vis_backends=vis_backends,
+    name='visualizer'
+)
+
+log_processor = dict(by_epoch=False)
+default_hooks = dict(
+    logger=dict(type='LoggerHook', interval=50),
+    visualization=dict(
+        type='SegVisualizationHook',
+        draw=True,
+        interval=200
+    ),
+    checkpoint=dict(
+        type='CheckpointHook',
+        interval=2000,
+        save_best='mIoU',
+        rule='greater'
+    )
+)
 
 
 # mixed precision
 fp16 = dict(loss_scale='dynamic')
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
-train_dataloader = dict(batch_size=2)
-val_dataloader = dict(batch_size=1)
+dataset_type = 'ADE20KDataset'
+data_root = '/workspace/Learning-RoPE/data/ade/ADEChallengeData2016'  # ✅ use absolute path
+
+train_dataloader = dict(
+    batch_size=2,
+    num_workers=4,
+    persistent_workers=True,
+    sampler=dict(type='InfiniteSampler', shuffle=True),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        data_prefix=dict(
+            img_path='images/training',
+            seg_map_path='annotations/training'),
+    )
+)
+
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=2,
+    persistent_workers=False,
+    sampler=dict(type='DefaultSampler', shuffle=False),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        data_prefix=dict(
+            img_path='images/validation',
+            seg_map_path='annotations/validation'),
+    )
+)
+
 test_dataloader = val_dataloader
+

@@ -1,17 +1,13 @@
 import torch.nn as nn
 import torch
 from mmengine.model import BaseModule
-from mmseg.registry import MODELS  # 若通用，建议换成 mmengine.registry
+from mmseg.registry import MODELS
 
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(__file__, '../../../..')))
-print("PYTHONPATH inserted:", os.path.abspath(os.path.join(__file__, '../../../..')))
 
-# print("sys.path =", sys.path)
-from models.mae_rope import MAE_RoPE
+from models.mae_rope import MAE_RoPE, MAEEncoder
 from models.vit import create_vit
 from configs.utils import load_config_from_yaml
+from RoPE.standard_rope import compute_axial_cis
 
 @MODELS.register_module()
 class VisionTransformerRoPE(BaseModule):
@@ -23,23 +19,36 @@ class VisionTransformerRoPE(BaseModule):
                  return_cls_token: bool = False,
                  return_feat_only: bool = False,
                  norm_eval: bool = True,
-                 init_cfg: dict = None):
+                 init_cfg: dict = None,
+                 ckpt_path: str = None):
         
         super().__init__(init_cfg=init_cfg)
 
         config = load_config_from_yaml(config_path)
         config.encoder.img_size = img_size
+
+        H = W = config.encoder.img_size // config.encoder.patch_size
+        head_dim = config.encoder.dim // config.encoder.n_heads
+        freqs_cis = compute_axial_cis(head_dim, H, W)
+
+        state_dict = torch.load(ckpt_path, map_location="cpu")['state_dict']
+        clean_state_dict = {
+            k.replace("model.", ""): v for k, v in state_dict.items() if k.startswith("model.")
+        }
+
+        encoder = MAEEncoder(freqs_cis, config.encoder)
+        encoder.load_state_dict(clean_state_dict, strict=False)
+
         self.norm_eval = norm_eval
         self.out_indices = out_indices
         self.return_cls_token = return_cls_token
         self.return_feat_only = return_feat_only
 
         if encoder_type == 'mae':
-            mae_rope = MAE_RoPE(config)
-            self.patch_embed = mae_rope.patch_embed
-            self.blocks = mae_rope.blocks
-            self.cls_token = mae_rope.cls_token
-            self.norm = mae_rope.norm
+            self.patch_embed = encoder.patch_embed
+            self.blocks = encoder.blocks
+            self.cls_token = encoder.cls_token
+            self.norm = encoder.norm
         else:
             vit_rope = create_vit(config)
             self.patch_embed = vit_rope.patch_embed
